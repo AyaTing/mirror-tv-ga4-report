@@ -7,10 +7,20 @@ Run: python test_filter.py
 import asyncio
 import io
 import os
-import sys
 from contextlib import redirect_stdout
 from types import SimpleNamespace
 from unittest.mock import patch
+
+import ga_report
+
+# Production order is screenPageViews, engagementRate. The test deliberately
+# stores rows in a different physical order from the headers it advertises
+# (engagementRate first, screenPageViews second) so that any reintroduction of
+# hardcoded index access would surface as a test failure.
+METRIC_HEADERS = [
+    SimpleNamespace(name="engagementRate"),
+    SimpleNamespace(name="screenPageViews"),
+]
 
 
 def make_row(title, path, views, engagement_rate):
@@ -20,8 +30,8 @@ def make_row(title, path, views, engagement_rate):
             SimpleNamespace(value=path),
         ],
         metric_values=[
-            SimpleNamespace(value=str(views)),
             SimpleNamespace(value=str(engagement_rate)),
+            SimpleNamespace(value=str(views)),
         ],
     )
 
@@ -70,12 +80,8 @@ def make_post(slug, source="tv"):
 
 def run_with_threshold(threshold, rows, posts):
     os.environ["MIN_ENGAGEMENT_RATE"] = str(threshold)
-    for module_name in ("ga_report",):
-        sys.modules.pop(module_name, None)
-    import ga_report
-
     FakeGraphQLClient.posts_in_db = posts
-    response = SimpleNamespace(rows=rows)
+    response = SimpleNamespace(rows=rows, metric_headers=METRIC_HEADERS)
 
     captured = io.StringIO()
     with patch.object(ga_report, "GraphQLClient", FakeGraphQLClient), redirect_stdout(captured):
