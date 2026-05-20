@@ -15,6 +15,12 @@ from gql_client import GraphQLClient
 from gql_queries import GET_POSTS_BY_SLUGS
 
 
+# Minimum GA4 engagement rate required for a page to qualify as a candidate.
+# Engaged session = > 10s, or has conversion, or 2+ pageviews. Crawler traffic
+# typically scores < 5%; real readers score 30%+. Configurable so the threshold
+# can be tuned without redeploy.
+MIN_ENGAGEMENT_RATE = float(os.environ.get('MIN_ENGAGEMENT_RATE', '0.3'))
+
 
 def format_post_data(post):
     data = post.copy()
@@ -42,13 +48,22 @@ async def get_article_async(response):
     for row in response.rows:
         uri = row.dimension_values[1].value
         id_match = re.match('/story/([\w-]+)', uri)
-        if id_match:
-            post_id = id_match.group(1)
-            if post_id in id_bucket:
-                continue
-            if post_id and post_id[:3] != 'mm-' and post_id not in exclusive:
-                target_slugs.append(post_id)
-                id_bucket.add(post_id)
+        if not id_match:
+            continue
+        post_id = id_match.group(1)
+        if post_id in id_bucket:
+            continue
+        if not post_id or post_id[:3] == 'mm-' or post_id in exclusive:
+            continue
+
+        engagement_rate = float(row.metric_values[1].value)
+        if engagement_rate < MIN_ENGAGEMENT_RATE:
+            views = row.metric_values[0].value
+            print(f"[bot-filtered] slug={post_id} views={views} engagement={engagement_rate:.1%}")
+            continue
+
+        target_slugs.append(post_id)
+        id_bucket.add(post_id)
 
     if not target_slugs:
         return {'articles': [], 'yt': []}
@@ -104,7 +119,10 @@ async def popular_report(property_id):
     request = RunReportRequest(
         property=f"properties/{property_id}",
         dimensions=[Dimension(name="pageTitle"), Dimension(name="pagePath")],
-        metrics=[Metric(name="screenPageViews")],
+        metrics=[
+            Metric(name="screenPageViews"),
+            Metric(name="engagementRate"),
+        ],
         date_ranges=[DateRange(start_date=start_date, end_date="today")],
     )
 
