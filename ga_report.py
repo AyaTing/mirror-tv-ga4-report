@@ -18,13 +18,19 @@ from gql_queries import GET_POSTS_BY_SLUGS
 def format_post_data(post):
     data = post.copy()
     data.pop('exclusive', None)
+    data['heroImageWebp'] = None
     if 'heroImage' in data and data['heroImage']:
         resized = data['heroImage'].get('resized')
+        resized_webp = data['heroImage'].get('resizedWebp') or {}
         if resized:
             data['heroImage'] = {
                 'w480': resized.get('w480'),
                 'w800': resized.get('w800')
             }
+            data['heroImageWebp'] = {
+                'w480': resized_webp.get('w480'),
+                'w800': resized_webp.get('w800')
+            } if any(resized_webp.values()) else None
         else:
             data['heroImage'] = None
     return data
