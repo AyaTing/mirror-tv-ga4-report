@@ -27,10 +27,12 @@ def format_post_data(post):
                 'w480': resized.get('w480'),
                 'w800': resized.get('w800')
             }
+            w480_webp = resized_webp.get('w480')
+            w800_webp = resized_webp.get('w800')
             data['heroImageWebp'] = {
-                'w480': resized_webp.get('w480'),
-                'w800': resized_webp.get('w800')
-            } if any(resized_webp.values()) else None
+                'w480': w480_webp,
+                'w800': w800_webp
+            } if w480_webp or w800_webp else None
         else:
             data['heroImage'] = None
     return data
